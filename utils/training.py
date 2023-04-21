@@ -107,8 +107,8 @@ class Trainer_jayaram(object):
                 # batch = batch_to_device(batch)
 
                 path, cond = self.dataset[0][0], self.dataset[0][1]
-                loss = self.model.loss(path, cond, device)
-                # loss, infos = self.model.loss(path, cond, device)
+                # loss = self.model.loss(path, cond, device)
+                loss, infos = self.model.loss(path, cond, device)
                 loss = loss / self.gradient_accumulate_every
                 loss.backward()
 
@@ -119,8 +119,8 @@ class Trainer_jayaram(object):
                 self.step_ema()
 
             if self.step % self.log_freq == 0:
-                # infos_str = ' | '.join([f'{key}: {val:8.4f}' for key, val in infos.items()])
-                print(f'{self.step}: {loss:8.4f} | t: {timer():8.4f}')
+                infos_str = ' | '.join([f'{key}: {val:8.4f}' for key, val in infos.items()])
+                print(f'{self.step}: {loss:8.4f} : {infos_str} | t: {timer():8.4f}')
 
             # if self.step == 0 and self.sample_freq:
             #     self.render_reference(self.n_reference)

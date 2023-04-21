@@ -49,7 +49,7 @@ class TemporalUnet_jayaram(nn.Module):
         state_dim,
         cond_dim,
         dim=32,
-        dim_mults=(1, 2, 4, 8),
+        dim_mults=(1, 4, 8),
     ):
         super().__init__()
 

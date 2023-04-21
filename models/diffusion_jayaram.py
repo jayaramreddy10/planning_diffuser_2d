@@ -12,7 +12,7 @@ from .helpers import (
 )
 
 class GaussianDiffusion_jayaram(nn.Module):
-    def __init__(self, model, horizon, observation_dim, device, n_timesteps=256,
+    def __init__(self, model, horizon, observation_dim, action_dim, device, n_timesteps=256,
         loss_type='l2', clip_denoised=True, predict_epsilon=False,
         action_weight=1.0, loss_discount=1.0, loss_weights=None,
     ):
@@ -20,8 +20,8 @@ class GaussianDiffusion_jayaram(nn.Module):
         self.horizon = horizon
         self.model = model   #this is temporalUNET, get this from model.pkl file
         self.observation_dim = observation_dim
-        self.action_dim = 0   #lets not consider action for now
-        self.transition_dim = observation_dim 
+        self.action_dim = 2   #lets not consider action for now
+        self.transition_dim = observation_dim + action_dim
 
         betas = cosine_beta_schedule(n_timesteps)
         alphas = 1. - betas
@@ -187,27 +187,27 @@ class GaussianDiffusion_jayaram(nn.Module):
 
         return sample
 
-    def p_losses(self, x_start, cond, t, device):   #x_start: [1, 384, 2] , cond: dict of states (0, 383) of len 2, t is random timestep in entire horizon (say 155)
+    def p_losses(self, x_start, cond, t, device):   #x_start: [1, 384, 6] , cond: dict of states (0, 383) of len 2, t is random timestep in entire horizon (say 155)
         #here x_start means start timestep of forward diffusion (not the start state of agent in the current path)
-        noise = torch.randn_like(x_start)    #[1, 384, 2]   #gaussian dist
+        noise = torch.randn_like(x_start)    #[1, 384, 6]   #gaussian dist
 
-        x_noisy = self.q_sample(device, x_start=x_start, t=t, noise=noise)      #[1, 384, 2]  -- forward pass of diffusion
+        x_noisy = self.q_sample(device, x_start=x_start, t=t, noise=noise)      #[1, 384, 6]  -- forward pass of diffusion
         x_noisy = apply_conditioning(x_noisy, cond, self.action_dim)    #fix x_noisy[0][0], x_noisy[0][383] with start and goal points i.e cond[0], cond[383]
 
-        x_recon = self.model(x_noisy, cond, t)   #[1, 384, 2] using UNET   (error: expected double but got float)
+        x_recon = self.model(x_noisy, cond, t)   #[1, 384, 6] using UNET   (error: expected double but got float)
         x_recon = apply_conditioning(x_recon, cond, self.action_dim)
 
         assert noise.shape == x_recon.shape
 
         if self.predict_epsilon:
-            loss = self.loss_fn(x_recon, noise)
-            # loss, info = self.loss_fn(x_recon, noise)
+            # loss = self.loss_fn(x_recon, noise)
+            loss, info = self.loss_fn(x_recon, noise)
         else:
-            loss = self.loss_fn(x_recon, x_start)
-            # loss, info = self.loss_fn(x_recon, x_start)
+            # loss = self.loss_fn(x_recon, x_start)
+            loss, info = self.loss_fn(x_recon, x_start)
 
-        return loss
-        # return loss, info
+        # return loss
+        return loss, info
 
     def loss(self, x, cond, device):   #x: (1, 384, 6) , cond : batch[1]
         batch_size = len(x)

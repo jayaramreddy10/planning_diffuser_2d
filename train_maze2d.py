@@ -10,6 +10,8 @@ import numpy as np
 from models.diffusion_jayaram import GaussianDiffusion_jayaram
 from models.temporal_model_jayaram import TemporalUnet_jayaram
 from utils.training import Trainer_jayaram
+from utils.arrays import batchify
+from d4rl_maze2d_dataset.sequence import SequenceDataset
 
 import torch
 from torch.utils.data import DataLoader as TorchDataLoader
@@ -25,26 +27,17 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 def train_network(args, path, cond):
     training_start_time = time.time()
-    state_dim = 2
-    cond_dim = 2
 
+    action_dim = 2
+    state_dim = 4
+    transition_dim = state_dim + action_dim
+    cond_dim = 4
     #load model architecture 
-    model = TemporalUnet_jayaram(args.horizon, state_dim, cond_dim)
+    model = TemporalUnet_jayaram(args.horizon, transition_dim, cond_dim)
     model = model.to(device)
 
-    diffusion = GaussianDiffusion_jayaram(model, args.horizon, state_dim, device)
+    diffusion = GaussianDiffusion_jayaram(model, args.horizon, state_dim, action_dim, device)
     diffusion = diffusion.to(device)
-
-    #-----------------------------------------------------------------------------#
-    #------------------------ test forward & backward pass -----------------------#
-    #-----------------------------------------------------------------------------#
-    print('Testing forward...', end=' ', flush=True)
-
-    loss = diffusion.loss(path, cond, device)     #forward pass
-    # loss, _ = diffusion.loss(path, cond, device)     #forward pass
-    loss.backward()                      #backward pass
-    print('✓')
-
 
     #-----------------------------------------------------------------------------#
     #--------------------------------- main loop ---------------------------------#
@@ -195,16 +188,46 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     #generate dataset
-    n_samples = 100
-    dataset = get_toy_dataset(n_samples, args.horizon)
 
-    #fetch first sample path in batch format, condition on terminal states as a dict
-    path = torch.tensor(dataset[0][None, :, :]).float()
-    path = path.to(device)
+    # n_samples = 100
+    # dataset = get_toy_dataset(n_samples, args.horizon)
 
-    cond = {}
-    cond[0] = torch.tensor(dataset[0][0][None, :]).float().to(device)
-    cond[args.horizon - 1] = torch.tensor(dataset[0][args.horizon - 1][None, :]).float().to(device)
+    # #fetch first sample path in batch format, condition on terminal states as a dict
+    # path = torch.tensor(dataset[0][None, :, :]).float()
+    # path = path.to(device)
+
+    # cond = {}
+    # cond[0] = torch.tensor(dataset[0][0][None, :]).float().to(device)
+    # cond[args.horizon - 1] = torch.tensor(dataset[0][args.horizon - 1][None, :]).float().to(device)
+
+    dataset = SequenceDataset()
+    batch = batchify(dataset[0])
+	# batch[0].shape: (1, 384, 6)
+	# batch[0] len : 384 (horizon)
+
+	# batch[1]: 2 elements in dict: (0, 383) as initial, final states are fixed in n_horizon
+	# {0: array([ 0.04206157, ...e=float32), 383: array([ 0.31135416, ...e=float32)}   , each with dim = (4, )
+
+    #-----------------------------------------------------------------------------#
+    #------------------------ test forward & backward pass -----------------------#
+    #-----------------------------------------------------------------------------#
+    action_dim = 2
+    state_dim = 4
+    transition_dim = state_dim + action_dim
+    cond_dim = 4
+    #load model architecture 
+    model = TemporalUnet_jayaram(args.horizon, transition_dim, cond_dim)
+    model = model.to(device)
+
+    diffusion = GaussianDiffusion_jayaram(model, args.horizon, state_dim, action_dim, device)
+    diffusion = diffusion.to(device)
+
+    print('Testing forward...', end=' ', flush=True)
+
+    # loss = diffusion.loss(*batch, device)     #forward pass
+    loss, _ = diffusion.loss(*batch, device)     #forward pass
+    loss.backward()                      #backward pass
+    print('✓')
 
     # Train the network on just first sample
-    train_network(args, path, cond)
+    train_network(args, *batch)
