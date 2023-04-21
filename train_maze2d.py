@@ -55,7 +55,7 @@ def train_network(args, path, cond):
 
     for i in range(args.epochs):
         print(f'Epoch {i} / {args.epochs} | {args.save_ckpt}')
-        trainer.train(device, n_train_steps=args.number_of_steps_per_epoch)
+        trainer.train(device, i, n_train_steps=args.number_of_steps_per_epoch)
 
     # Save results
     # if save_results:
@@ -148,7 +148,7 @@ if __name__ == "__main__":
         "-n_steps_per_epoch",
         "--number_of_steps_per_epoch",
         type=int,
-        default=10000,
+        default=7000,
         help="Number of steps per epoch",
     )
 

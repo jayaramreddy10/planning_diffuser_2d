@@ -98,7 +98,7 @@ class Trainer_jayaram(object):
     #------------------------------------ api ------------------------------------#
     #-----------------------------------------------------------------------------#
 
-    def train(self, device, n_train_steps):
+    def train(self, device, epoch_no, n_train_steps):
 
         timer = Timer()
         for step in range(n_train_steps):
@@ -118,10 +118,6 @@ class Trainer_jayaram(object):
             if self.step % self.update_ema_every == 0:
                 self.step_ema()
 
-            if self.step % self.save_freq == 0:
-                label = self.step // self.label_freq * self.label_freq
-                self.save(label)
-
             if self.step % self.log_freq == 0:
                 # infos_str = ' | '.join([f'{key}: {val:8.4f}' for key, val in infos.items()])
                 print(f'{self.step}: {loss:8.4f} | t: {timer():8.4f}')
@@ -133,6 +129,9 @@ class Trainer_jayaram(object):
             #     self.render_samples(n_samples=self.n_samples)
 
             self.step += 1
+
+        label = epoch_no
+        self.save(label)
 
     def save(self, epoch):
         '''
