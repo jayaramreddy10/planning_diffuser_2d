@@ -2,8 +2,8 @@ import numpy as np
 import torch
 from torch import nn
 import pdb
+from utils.progress import Progress, Silent
 
-import diffuser.utils as utils
 from .helpers import (
     cosine_beta_schedule,
     extract,

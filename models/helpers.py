@@ -6,8 +6,7 @@ import torch.nn.functional as F
 import einops
 from einops.layers.torch import Rearrange
 import pdb
-
-import diffuser.utils as utils
+from utils.arrays import to_np
 
 #-----------------------------------------------------------------------------#
 #---------------------------------- modules ----------------------------------#
@@ -123,8 +122,8 @@ class ValueLoss(nn.Module):
 
         if len(pred) > 1:
             corr = np.corrcoef(
-                utils.to_np(pred).squeeze(),
-                utils.to_np(targ).squeeze()
+                to_np(pred).squeeze(),
+                to_np(targ).squeeze()
             )[0,1]
         else:
             corr = np.NaN
