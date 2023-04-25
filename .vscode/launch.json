@@ -99,6 +99,18 @@
             "args": [
                 "--logbase", "logs/pretrained", "--dataset", "halfcheetah-medium-expert-v2"
             ]
+        },
+
+        {
+            "name": "/home/jayaram/research/research_tracks/table_top_rearragement/test_diffusion_planning/plan_maze2d.py",
+            "type": "python",
+            "request": "launch",
+            "program": "/home/jayaram/research/research_tracks/table_top_rearragement/test_diffusion_planning/plan_maze2d.py",
+            "console": "integratedTerminal",
+            "justMyCode": false,
+            "args": [
+                // "--config", "config.maze2d", "--dataset", "maze2d-large-v1"
+            ]
         }
 
     ]
