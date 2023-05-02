@@ -12,6 +12,7 @@ from models.temporal_model_jayaram import TemporalUnet_jayaram
 from utils.training import Trainer_jayaram
 from utils.arrays import batchify
 from d4rl_maze2d_dataset.sequence import SequenceDataset
+from utils.rendering import Maze2dRenderer
 
 import torch
 from torch.utils.data import DataLoader as TorchDataLoader
@@ -25,7 +26,7 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 # os.environ["CUDA_VISIBLE_DEVICES"]="0,1,2,3"
 
 
-def train_network(args, path, cond):
+def train_network_single_sample(args, path, cond):
     training_start_time = time.time()
 
     action_dim = 2
@@ -45,6 +46,44 @@ def train_network(args, path, cond):
     dataset = []
     dataset.append((path, cond))
     trainer = Trainer_jayaram(diffusion, dataset)
+
+    for i in range(args.epochs):
+        print(f'Epoch {i} / {args.epochs} | {args.save_ckpt}')
+        trainer.train(device, i, n_train_steps=args.number_of_steps_per_epoch)
+
+    # Save results
+    # if save_results:
+    #     # Rename the final training log instead of re-writing it
+    #     training_log_path = os.path.join(args.output_dir, "training_log.pkl")
+    #     os.rename(epoch_training_log_path, training_log_path)
+
+    print("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
+    print("")
+    print("Done.")
+    print("")
+    print("Total training time: {} seconds.".format(time.time() - training_start_time))
+    print("")
+
+def train_network(args, dataset):
+    training_start_time = time.time()
+
+    action_dim = 2
+    state_dim = 4
+    transition_dim = state_dim + action_dim
+    cond_dim = 4
+    #load model architecture 
+    model = TemporalUnet_jayaram(args.horizon, transition_dim, cond_dim)
+    model = model.to(device)
+
+    diffusion = GaussianDiffusion_jayaram(model, args.horizon, state_dim, action_dim, device)
+    diffusion = diffusion.to(device)
+
+    #-----------------------------------------------------------------------------#
+    #--------------------------------- main loop ---------------------------------#
+    #-----------------------------------------------------------------------------#
+
+    renderer = Maze2dRenderer('maze2d-large-v1')
+    trainer = Trainer_jayaram(diffusion, dataset, renderer)
 
     for i in range(args.epochs):
         print(f'Epoch {i} / {args.epochs} | {args.save_ckpt}')
@@ -129,19 +168,19 @@ if __name__ == "__main__":
         "-save_ckpt",
         "--save_ckpt",
         type=str,
-        default="/home/jayaram/research/research_tracks/table_top_rearragement/test_diffusion_planning/logs/maze2d/diffusion",
+        default="/home/jayaram/research/research_tracks/table_top_rearragement/test_diffusion_planning/logs/maze2d-large-v1/diffusion",
         help="save checkpoints of diffusion model while training",
     )
 
     parser.add_argument(
-        "-e", "--epochs", type=int, default=100, help="Number of epochs to train."
+        "-e", "--epochs", type=int, default=2, help="Number of epochs to train."
     )
 
     parser.add_argument(
         "-n_steps_per_epoch",
         "--number_of_steps_per_epoch",
         type=int,
-        default=7000,
+        default=200,
         help="Number of steps per epoch",
     )
 
@@ -229,5 +268,8 @@ if __name__ == "__main__":
     loss.backward()                      #backward pass
     print('✓')
 
-    # Train the network on just first sample
-    train_network(args, *batch)
+    # # Train the network on just first sample
+    # train_network_single_sample(args, *batch)
+
+    # Train the network on many samples
+    train_network(args, dataset)

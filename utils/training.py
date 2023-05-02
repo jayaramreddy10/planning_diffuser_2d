@@ -6,7 +6,7 @@ import einops
 import pdb
 import os
 from .timer import Timer
-
+from .arrays import batch_to_device, to_np, apply_dict, to_device
 
 def cycle(dl):
     while True:
@@ -35,7 +35,8 @@ class Trainer_jayaram(object):
     def __init__(
         self,
         diffusion_model,
-        dataset,   
+        dataset,  
+        renderer, 
         ema_decay=0.995,
         train_batch_size=32,
         train_lr=2e-5,
@@ -45,11 +46,11 @@ class Trainer_jayaram(object):
         log_freq=100,
         sample_freq=1000,
         save_freq=1000,
-        label_freq=100000,
+        label_freq=40000,
         save_parallel=False,
-        results_folder='/home/jayaram/research/research_tracks/table_top_rearragement/test_diffusion_planning/logs/maze2d/diffusion',
-        n_reference=8,
-        n_samples=2,
+        results_folder='/home/jayaram/research/research_tracks/table_top_rearragement/test_diffusion_planning/logs/maze2d-large-v1/diffusion',
+        n_reference=50,
+        n_samples=10,
         bucket=None,
     ):
         super().__init__()
@@ -69,12 +70,13 @@ class Trainer_jayaram(object):
         self.gradient_accumulate_every = gradient_accumulate_every
 
         self.dataset = dataset
-        # self.dataloader = cycle(torch.utils.data.DataLoader(
-        #     self.dataset, batch_size=train_batch_size, num_workers=1, shuffle=True, pin_memory=True
-        # ))
-        # self.dataloader_vis = cycle(torch.utils.data.DataLoader(
-        #     self.dataset, batch_size=1, num_workers=0, shuffle=True, pin_memory=True
-        # ))
+        self.renderer = renderer
+        self.dataloader = cycle(torch.utils.data.DataLoader(
+            self.dataset, batch_size=train_batch_size, num_workers=1, shuffle=True, pin_memory=True
+        ))
+        self.dataloader_vis = cycle(torch.utils.data.DataLoader(
+            self.dataset, batch_size=1, num_workers=0, shuffle=True, pin_memory=True
+        ))
         self.optimizer = torch.optim.Adam(diffusion_model.parameters(), lr=train_lr)
 
         self.logdir = results_folder
@@ -103,12 +105,12 @@ class Trainer_jayaram(object):
         timer = Timer()
         for step in range(n_train_steps):
             for i in range(self.gradient_accumulate_every):
-                # batch = next(self.dataloader)    #(32, 384, 6)
-                # batch = batch_to_device(batch)
+                batch = next(self.dataloader)    #batch[0].shape: (32, 384, 6), batch[1][0].shape: (32, 4),  batch[1][383].shape: (32, 4)
+                batch = batch_to_device(batch)
 
-                path, cond = self.dataset[0][0], self.dataset[0][1]
+                # path, cond = self.dataset[0][0], self.dataset[0][1]    #for single path training
                 # loss = self.model.loss(path, cond, device)
-                loss, infos = self.model.loss(path, cond, device)
+                loss, infos = self.model.loss(*batch, device)
                 loss = loss / self.gradient_accumulate_every
                 loss.backward()
 
@@ -122,11 +124,11 @@ class Trainer_jayaram(object):
                 infos_str = ' | '.join([f'{key}: {val:8.4f}' for key, val in infos.items()])
                 print(f'{self.step}: {loss:8.4f} : {infos_str} | t: {timer():8.4f}')
 
-            # if self.step == 0 and self.sample_freq:
-            #     self.render_reference(self.n_reference)
+            if self.step == 0 and self.sample_freq:
+                self.render_reference(self.n_reference)
 
-            # if self.sample_freq and self.step % self.sample_freq == 0:
-            #     self.render_samples(n_samples=self.n_samples)
+            if self.sample_freq and self.step % self.sample_freq == 0:
+                self.render_samples(n_samples=self.n_samples)
 
             self.step += 1
 
@@ -164,4 +166,86 @@ class Trainer_jayaram(object):
         self.model.load_state_dict(data['model'])
         self.ema_model.load_state_dict(data['ema'])
 
+    #-----------------------------------------------------------------------------#
+    #--------------------------------- rendering ---------------------------------#
+    #-----------------------------------------------------------------------------#
+    def render_reference(self, batch_size=10):
+        '''
+            renders training points
+        '''
+
+        ## get a temporary dataloader to load a single batch
+        dataloader_tmp = cycle(torch.utils.data.DataLoader(
+            self.dataset, batch_size=batch_size, num_workers=0, shuffle=True, pin_memory=True
+        ))
+        batch = dataloader_tmp.__next__()
+        dataloader_tmp.close()
+
+        ## get trajectories and condition at t=0 from batch
+        trajectories = to_np(batch.trajectories)
+        conditions = to_np(batch.conditions[0])[:,None]
+
+        ## [ batch_size x horizon x observation_dim ]
+        normed_observations = trajectories[:, :, self.dataset.action_dim:]
+        observations = self.dataset.normalizer.unnormalize(normed_observations, 'observations')
+
+        # from diffusion.datasets.preprocessing import blocks_cumsum_quat
+        # # observations = conditions + blocks_cumsum_quat(deltas)
+        # observations = conditions + deltas.cumsum(axis=1)
+
+        #### @TODO: remove block-stacking specific stuff
+        # from diffusion.datasets.preprocessing import blocks_euler_to_quat, blocks_add_kuka
+        # observations = blocks_add_kuka(observations)
+        ####
+
+        savepath = os.path.join(self.logdir, f'_sample-reference.png')
+        self.renderer.composite(savepath, observations)
+
+    def render_samples(self, batch_size=2, n_samples=2):
+        '''
+            renders samples from (ema) diffusion model
+        '''
+        for i in range(batch_size):
+
+            ## get a single datapoint
+            batch = self.dataloader_vis.__next__()
+            conditions = to_device(batch.conditions, 'cuda:0')
+
+            ## repeat each item in conditions `n_samples` times
+            conditions = apply_dict(
+                einops.repeat,
+                conditions,
+                'b d -> (repeat b) d', repeat=n_samples,
+            )
+
+            ## [ n_samples x horizon x (action_dim + observation_dim) ]
+            samples = self.ema_model.conditional_sample(conditions)
+            samples = to_np(samples)
+
+            ## [ n_samples x horizon x observation_dim ]
+            normed_observations = samples[:, :, self.dataset.action_dim:]
+
+            # [ 1 x 1 x observation_dim ]
+            normed_conditions = to_np(batch.conditions[0])[:,None]
+
+            # from diffusion.datasets.preprocessing import blocks_cumsum_quat
+            # observations = conditions + blocks_cumsum_quat(deltas)
+            # observations = conditions + deltas.cumsum(axis=1)
+
+            ## [ n_samples x (horizon + 1) x observation_dim ]
+            normed_observations = np.concatenate([
+                np.repeat(normed_conditions, n_samples, axis=0),
+                normed_observations
+            ], axis=1)
+
+            ## [ n_samples x (horizon + 1) x observation_dim ]
+            observations = self.dataset.normalizer.unnormalize(normed_observations, 'observations')
+
+            #### @TODO: remove block-stacking specific stuff
+            # from diffusion.datasets.preprocessing import blocks_euler_to_quat, blocks_add_kuka
+            # observations = blocks_add_kuka(observations)
+            ####
+
+            savepath = os.path.join(self.logdir, f'sample-{self.step}-{i}.png')
+            self.renderer.composite(savepath, observations)
 

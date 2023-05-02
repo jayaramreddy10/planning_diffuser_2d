@@ -145,7 +145,7 @@ class GaussianDiffusion_jayaram(nn.Module):
 
         if return_diffusion: diffusion = [x]
 
-        progress = utils.Progress(self.n_timesteps) if verbose else utils.Silent()
+        progress = Progress(self.n_timesteps) if verbose else Silent()
         for i in reversed(range(0, self.n_timesteps)):
             timesteps = torch.full((batch_size,), i, device=device, dtype=torch.long)
             x = self.p_sample(x, cond, timesteps)
@@ -187,14 +187,14 @@ class GaussianDiffusion_jayaram(nn.Module):
 
         return sample
 
-    def p_losses(self, x_start, cond, t, device):   #x_start: [1, 384, 6] , cond: dict of states (0, 383) of len 2, t is random timestep in entire horizon (say 155)
+    def p_losses(self, x_start, cond, t, device):   #x_start: [32, 384, 6] , cond: dict of states (0, 383) of len 4, t is random timestep in entire horizon (say 155)
         #here x_start means start timestep of forward diffusion (not the start state of agent in the current path)
-        noise = torch.randn_like(x_start)    #[1, 384, 6]   #gaussian dist
+        noise = torch.randn_like(x_start)    #[32, 384, 6]   #gaussian dist
 
-        x_noisy = self.q_sample(device, x_start=x_start, t=t, noise=noise)      #[1, 384, 6]  -- forward pass of diffusion
+        x_noisy = self.q_sample(device, x_start=x_start, t=t, noise=noise)      #[32, 384, 6]  -- forward pass of diffusion
         x_noisy = apply_conditioning(x_noisy, cond, self.action_dim)    #fix x_noisy[0][0], x_noisy[0][383] with start and goal points i.e cond[0], cond[383]
 
-        x_recon = self.model(x_noisy, cond, t)   #[1, 384, 6] using UNET   (error: expected double but got float)
+        x_recon = self.model(x_noisy, cond, t)   #[32, 384, 6] using Temporal UNET   (error: expected double but got float)
         x_recon = apply_conditioning(x_recon, cond, self.action_dim)
 
         assert noise.shape == x_recon.shape
@@ -209,7 +209,7 @@ class GaussianDiffusion_jayaram(nn.Module):
         # return loss
         return loss, info
 
-    def loss(self, x, cond, device):   #x: (1, 384, 6) , cond : batch[1]
+    def loss(self, x, cond, device):   #x.shape: (b, 384, 6) , cond : batch[1], cond[0].shape: (b, 4) and cond[1].shape: (b, 4)
         batch_size = len(x)
         t = torch.randint(0, self.n_timesteps, (batch_size,), device=x.device).long()    #choose a random timestep uniformly in reverse diffusion process
         return self.p_losses(x, cond, t, device)

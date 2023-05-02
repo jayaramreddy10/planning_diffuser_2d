@@ -108,9 +108,9 @@ class TemporalUnet_jayaram(nn.Module):
             x : [ batch x horizon x transition ]
         '''
 
-        x = einops.rearrange(x, 'b h t -> b t h')
+        x = einops.rearrange(x, 'b h t -> b t h')   #(32, 6, 384)
 
-        t = self.time_mlp(time)
+        t = self.time_mlp(time)   #(32, 32)
         h = []
 
         for resnet, resnet2, downsample in self.downs:
@@ -130,5 +130,5 @@ class TemporalUnet_jayaram(nn.Module):
 
         x = self.final_conv(x)
 
-        x = einops.rearrange(x, 'b t h -> b h t')
+        x = einops.rearrange(x, 'b t h -> b h t')   #(32, 6, 384)
         return x
