@@ -1,7 +1,7 @@
 {
-  "epoch_diffusion": 99,
-  "return": 22.0,
-  "score": 0.057241198698043325,
+  "epoch_diffusion": 199,
+  "return": 432.0,
+  "score": 1.5911556736129298,
   "step": 799,
   "term": false
 }

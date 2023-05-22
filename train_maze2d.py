@@ -11,7 +11,7 @@ from models.diffusion_jayaram import GaussianDiffusion_jayaram
 from models.temporal_model_jayaram import TemporalUnet_jayaram
 from utils.training import Trainer_jayaram
 from utils.arrays import batchify
-from d4rl_maze2d_dataset.sequence import SequenceDataset
+from d4rl_maze2d_dataset.sequence import SequenceDataset, Maze2dDataset, RRT_star_traj
 from utils.rendering import Maze2dRenderer
 
 import torch
@@ -67,10 +67,10 @@ def train_network_single_sample(args, path, cond):
 def train_network(args, dataset):
     training_start_time = time.time()
 
-    action_dim = 2
-    state_dim = 4
+    action_dim = 0
+    state_dim = 2
     transition_dim = state_dim + action_dim
-    cond_dim = 4
+    cond_dim = 2
     #load model architecture 
     model = TemporalUnet_jayaram(args.horizon, transition_dim, cond_dim)
     model = model.to(device)
@@ -239,8 +239,21 @@ if __name__ == "__main__":
     # cond[0] = torch.tensor(dataset[0][0][None, :]).float().to(device)
     # cond[args.horizon - 1] = torch.tensor(dataset[0][args.horizon - 1][None, :]).float().to(device)
 
-    dataset = SequenceDataset()
-    batch = batchify(dataset[0])
+    # dataset = SequenceDataset()
+    # batch = batchify(dataset[0])
+
+    #generate collision free trajs
+    n_trajs = 10
+    trajs = []
+    for i in range(n_trajs):
+        RRT_Star = RRT_star_traj()
+        traj, cond, val = RRT_Star.generate_traj()    #higher the val, higher the reward (so if val is high, path len is less which is optimal)
+        trajs.append((traj, cond, val))
+
+    #generate remaining trajs
+
+    dataset = Maze2dDataset(trajs, n_trajs = len(trajs))
+    # batch = batchify(dataset[0])
 	# batch[0].shape: (1, 384, 6)
 	# batch[0] len : 384 (horizon)
 
@@ -250,23 +263,38 @@ if __name__ == "__main__":
     #-----------------------------------------------------------------------------#
     #------------------------ test forward & backward pass -----------------------#
     #-----------------------------------------------------------------------------#
-    action_dim = 2
-    state_dim = 4
+    # change action dim to 2 later
+    action_dim = 0
+    state_dim = 2
     transition_dim = state_dim + action_dim
-    cond_dim = 4
-    #load model architecture 
-    model = TemporalUnet_jayaram(args.horizon, transition_dim, cond_dim)
-    model = model.to(device)
+    cond_dim = 2
 
-    diffusion = GaussianDiffusion_jayaram(model, args.horizon, state_dim, action_dim, device)
-    diffusion = diffusion.to(device)
+	# batch[0].shape: (1, 384, 6)
+	# batch[0] len : 384 (horizon)
 
-    print('Testing forward...', end=' ', flush=True)
+	# batch[1]: 2 elements in dict: (0, 383) as initial, final states are fixed in n_horizon
+	# {0: array([ 0.04206157, ...e=float32), 383: array([ 0.31135416, ...e=float32)}   , each with dim = (4, )
 
-    # loss = diffusion.loss(*batch, device)     #forward pass
-    loss, _ = diffusion.loss(*batch, device)     #forward pass
-    loss.backward()                      #backward pass
-    print('✓')
+    #-----------------------------------------------------------------------------#
+    #------------------------ test forward & backward pass -----------------------#
+    #-----------------------------------------------------------------------------#
+    action_dim = 0
+    state_dim = 2
+    transition_dim = state_dim + action_dim
+    cond_dim = 2
+    # #load model architecture 
+    # model = TemporalUnet_jayaram(args.horizon, transition_dim, cond_dim)
+    # model = model.to(device)
+
+    # diffusion = GaussianDiffusion_jayaram(model, args.horizon, state_dim, action_dim, device)
+    # diffusion = diffusion.to(device)
+
+    # print('Testing forward...', end=' ', flush=True)
+
+    # # loss = diffusion.loss(*batch, device)     #forward pass
+    # loss, _ = diffusion.loss(*batch, device)     #forward pass
+    # loss.backward()                      #backward pass
+    # print('✓')
 
     # # Train the network on just first sample
     # train_network_single_sample(args, *batch)

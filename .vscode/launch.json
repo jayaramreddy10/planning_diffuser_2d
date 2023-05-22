@@ -111,6 +111,42 @@
             "args": [
                 // "--config", "config.maze2d", "--dataset", "maze2d-large-v1"
             ]
+        },
+
+        {
+            "name": "/home/jayaram/research/research_tracks/table_top_rearragement/test_diffusion_planning/train_policy.py",
+            "type": "python",
+            "request": "launch",
+            "program": "/home/jayaram/research/research_tracks/table_top_rearragement/test_diffusion_planning/train_policy.py",
+            "console": "integratedTerminal",
+            "justMyCode": false,
+            "args": [
+                // "--config", "config.maze2d", "--dataset", "maze2d-large-v1"
+            ]
+        },
+
+        {
+            "name": "/home/jayaram/research/research_tracks/table_top_rearragement/test_diffusion_planning/train_diffusion.py",
+            "type": "python",
+            "request": "launch",
+            "program": "/home/jayaram/research/research_tracks/table_top_rearragement/test_diffusion_planning/train_diffusion.py",
+            "console": "integratedTerminal",
+            "justMyCode": false,
+            "args": [
+                // "--config", "config.maze2d", "--dataset", "maze2d-large-v1"
+            ]
+        },
+
+        {
+            "name": "/home/jayaram/research/research_tracks/table_top_rearragement/test_diffusion_planning/read_maze2d_binary_env.py",
+            "type": "python",
+            "request": "launch",
+            "program": "/home/jayaram/research/research_tracks/table_top_rearragement/test_diffusion_planning/read_maze2d_binary_env.py",
+            "console": "integratedTerminal",
+            "justMyCode": false,
+            "args": [
+                // "--config", "config.maze2d", "--dataset", "maze2d-large-v1"
+            ]
         }
 
     ]

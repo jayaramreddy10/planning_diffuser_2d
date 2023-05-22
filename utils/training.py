@@ -36,9 +36,9 @@ class Trainer_jayaram(object):
         self,
         diffusion_model,
         dataset,  
-        renderer, 
+        # renderer, 
         ema_decay=0.995,
-        train_batch_size=32,
+        train_batch_size=5,
         train_lr=2e-5,
         gradient_accumulate_every=2,
         step_start_ema=2000,
@@ -70,7 +70,7 @@ class Trainer_jayaram(object):
         self.gradient_accumulate_every = gradient_accumulate_every
 
         self.dataset = dataset
-        self.renderer = renderer
+        # self.renderer = renderer
         self.dataloader = cycle(torch.utils.data.DataLoader(
             self.dataset, batch_size=train_batch_size, num_workers=1, shuffle=True, pin_memory=True
         ))
@@ -101,16 +101,26 @@ class Trainer_jayaram(object):
     #-----------------------------------------------------------------------------#
 
     def train(self, device, epoch_no, n_train_steps):
-
+        isExist = os.path.exists(self.logdir)
+        if not isExist:
+            # Create a new directory because it does not exist
+            os.makedirs(self.logdir)
+            print("The new directory is created!")  
+            
         timer = Timer()
         for step in range(n_train_steps):
             for i in range(self.gradient_accumulate_every):
                 batch = next(self.dataloader)    #batch[0].shape: (32, 384, 6), batch[1][0].shape: (32, 4),  batch[1][383].shape: (32, 4)
-                batch = batch_to_device(batch)
+                # batch = batch_to_device(batch)
+                for i, el in enumerate(batch):
+                    batch[i] = to_device(batch[i])
 
                 # path, cond = self.dataset[0][0], self.dataset[0][1]    #for single path training
                 # loss = self.model.loss(path, cond, device)
-                loss, infos = self.model.loss(*batch, device)
+
+                #for value fn training, infos is removed
+                # loss, infos = self.model.loss(*batch)
+                loss = self.model.loss(*batch) 
                 loss = loss / self.gradient_accumulate_every
                 loss.backward()
 
@@ -121,14 +131,16 @@ class Trainer_jayaram(object):
                 self.step_ema()
 
             if self.step % self.log_freq == 0:
-                infos_str = ' | '.join([f'{key}: {val:8.4f}' for key, val in infos.items()])
-                print(f'{self.step}: {loss:8.4f} : {infos_str} | t: {timer():8.4f}')
+                # infos_str = ' | '.join([f'{key}: {val:8.4f}' for key, val in infos.items()])
+                # print(f'{self.step}: {loss:8.4f} : {infos_str} | t: {timer():8.4f}')
 
-            if self.step == 0 and self.sample_freq:
-                self.render_reference(self.n_reference)
+                print(f'{self.step}: {loss:8.4f}  | t: {timer():8.4f}')
 
-            if self.sample_freq and self.step % self.sample_freq == 0:
-                self.render_samples(n_samples=self.n_samples)
+            # if self.step == 0 and self.sample_freq:
+            #     self.render_reference(self.n_reference)
+
+            # if self.sample_freq and self.step % self.sample_freq == 0:
+            #     self.render_samples(n_samples=self.n_samples)
 
             self.step += 1
 
@@ -199,7 +211,7 @@ class Trainer_jayaram(object):
         ####
 
         savepath = os.path.join(self.logdir, f'_sample-reference.png')
-        self.renderer.composite(savepath, observations)
+        # self.renderer.composite(savepath, observations)
 
     def render_samples(self, batch_size=2, n_samples=2):
         '''

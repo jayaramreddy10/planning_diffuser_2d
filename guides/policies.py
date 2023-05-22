@@ -39,7 +39,7 @@ class Policy:
     def __call__(self, conditions, debug=False, batch_size=1):
 
 
-        conditions = self._format_conditions(conditions, batch_size)
+        conditions = self._format_conditions(conditions, batch_size)   #normalizing the conditional points
 
         ## batchify and move to tensor [ batch_size x observation_dim ]
         # observation_np = observation_np[None].repeat(batch_size, axis=0)

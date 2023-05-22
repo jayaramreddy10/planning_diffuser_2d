@@ -46,6 +46,7 @@ def load_diffusion(*loadpath, epoch='latest', device='cuda:0'):
 
     dataset = dataset_config()
     renderer = render_config()
+    # renderer = None
     model = model_config()
     diffusion = diffusion_config(model)
     trainer = trainer_config(diffusion, dataset, renderer)

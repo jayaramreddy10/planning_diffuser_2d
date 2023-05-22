@@ -3,13 +3,14 @@ import torch
 from torch import nn
 import pdb
 from utils.progress import Progress, Silent
-
 from .helpers import (
     cosine_beta_schedule,
     extract,
     apply_conditioning,
     Losses,
 )
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
 
 class GaussianDiffusion_jayaram(nn.Module):
     def __init__(self, model, horizon, observation_dim, action_dim, device, n_timesteps=256,
@@ -20,7 +21,7 @@ class GaussianDiffusion_jayaram(nn.Module):
         self.horizon = horizon
         self.model = model   #this is temporalUNET, get this from model.pkl file
         self.observation_dim = observation_dim
-        self.action_dim = 2   #lets not consider action for now
+        self.action_dim = 0   #lets not consider action for now
         self.transition_dim = observation_dim + action_dim
 
         betas = cosine_beta_schedule(n_timesteps)
@@ -176,7 +177,7 @@ class GaussianDiffusion_jayaram(nn.Module):
 
     #------------------------------------------ training ------------------------------------------#
 
-    def q_sample(self, device, x_start, t, noise=None):
+    def q_sample(self, x_start, t, noise=None):
         if noise is None:
             noise = torch.randn_like(x_start)
 
@@ -187,11 +188,11 @@ class GaussianDiffusion_jayaram(nn.Module):
 
         return sample
 
-    def p_losses(self, x_start, cond, t, device):   #x_start: [32, 384, 6] , cond: dict of states (0, 383) of len 4, t is random timestep in entire horizon (say 155)
+    def p_losses(self, x_start, cond, t):   #x_start: [32, 384, 6] , cond: dict of states (0, 383) of len 4, t is random timestep in entire horizon (say 155)
         #here x_start means start timestep of forward diffusion (not the start state of agent in the current path)
         noise = torch.randn_like(x_start)    #[32, 384, 6]   #gaussian dist
 
-        x_noisy = self.q_sample(device, x_start=x_start, t=t, noise=noise)      #[32, 384, 6]  -- forward pass of diffusion
+        x_noisy = self.q_sample(x_start=x_start, t=t, noise=noise)      #[32, 384, 6]  -- forward pass of diffusion
         x_noisy = apply_conditioning(x_noisy, cond, self.action_dim)    #fix x_noisy[0][0], x_noisy[0][383] with start and goal points i.e cond[0], cond[383]
 
         x_recon = self.model(x_noisy, cond, t)   #[32, 384, 6] using Temporal UNET   (error: expected double but got float)
@@ -209,11 +210,29 @@ class GaussianDiffusion_jayaram(nn.Module):
         # return loss
         return loss, info
 
-    def loss(self, x, cond, device):   #x.shape: (b, 384, 6) , cond : batch[1], cond[0].shape: (b, 4) and cond[1].shape: (b, 4)
+    def loss(self, x, *args):   #x.shape: (b, 384, 6) , cond : batch[1], cond[0].shape: (b, 4) and cond[1].shape: (b, 4)
         batch_size = len(x)
         t = torch.randint(0, self.n_timesteps, (batch_size,), device=x.device).long()    #choose a random timestep uniformly in reverse diffusion process
-        return self.p_losses(x, cond, t, device)
+        return self.p_losses(x, *args, t)
 
     def forward(self, cond, *args, **kwargs):
         return self.conditional_sample(cond=cond, *args, **kwargs)
+    
+class ValueDiffusion_jayaram(GaussianDiffusion_jayaram):
+
+    def p_losses(self, x_start, cond, target, t):   #target is scalar
+        noise = torch.randn_like(x_start)    #torch.Size([32, 4, 23])   
+        #target shape: (32, 1)
+        #cond shape: (32, 17)
+
+        x_noisy = self.q_sample(x_start=x_start, t=t, noise=noise)  #forward diffusion process, compute x_t from x_0 for each sample in batch based on t (for that sample)
+        x_noisy = apply_conditioning(x_noisy, cond, self.action_dim)
+
+        pred = self.model(x_noisy, cond, t).view(-1)   #scalars, so this value fn predicts rewards/values from noisy trajectories. Each traj shape:  (4, 23), it has info of both (a, s)
+
+        loss = nn.MSELoss()(pred, target)
+        return loss
+
+    def forward(self, x, cond, t):
+        return self.model(x, cond, t)
 

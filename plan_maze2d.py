@@ -11,7 +11,7 @@ from utils.serialization import load_diffusion
 def rollout_policy(env, diffusion, dataset, renderer, policy):
     #---------------------------------- main loop ----------------------------------#
 
-    observation = env.reset()
+    observation = env.reset()   #[6.7004, 0.8052]  #x is down, y is right (axes in plot) (not working for this point)
 
     #start state: tensor([[ 0.0421,  0.1417,  0.0141, -0.0005]], device='cuda:0')
     #end state: tensor([[ 0.3114,  0.6512,  0.0737, -0.8078]], device='cuda:0')
@@ -19,11 +19,11 @@ def rollout_policy(env, diffusion, dataset, renderer, policy):
     # observation = np.array([0.0421,  0.1417,  0.0141, -0.0005])
     if args.conditional:
         print('Resetting target')
-        env.set_target(np.array([7.8144, 3.7368]))
+        env.set_target(np.array([6.7004,10.3052]))
 
     ## set conditioning xy position to be the goal
     target = env._target
-    target = np.array([7.8144, 3.7368])
+    target = np.array([6.7004,10.3052])
     cond = {
         diffusion.horizon - 1: np.array([*target, 0, 0]),
     }
@@ -41,9 +41,9 @@ def rollout_policy(env, diffusion, dataset, renderer, policy):
         if t == 0:
             cond[0] = observation
 
-            action, samples = policy(cond, batch_size=1)    #samples[0].shape: (1, 384, 2)
-            actions = samples.actions[0]
-            sequence = samples.observations[0]
+            action, samples = policy(cond, batch_size=1)    #samples[0].shape: (1, 384, 6)
+            actions = samples.actions[0]   #(384, 2)
+            sequence = samples.observations[0]  #(384, 4) - qpose, qvel
         # pdb.set_trace()
 
         # ####
@@ -55,7 +55,7 @@ def rollout_policy(env, diffusion, dataset, renderer, policy):
             # pdb.set_trace()
 
         ## can use actions or define a simple controller based on state predictions
-        action = next_waypoint[:2] - state[:2] + (next_waypoint[2:] - state[2:])
+        action = next_waypoint[:2] - state[:2] + (next_waypoint[2:] - state[2:])   #not clear why we subtract vel at time t in the second term
         # pdb.set_trace()
         ####
 

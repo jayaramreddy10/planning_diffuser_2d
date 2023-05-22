@@ -27,7 +27,7 @@ def to_torch(x, dtype=None, device=None):
 
 def to_device(x, device=DEVICE):
 	if torch.is_tensor(x):
-		return x.to(device)
+		return x.to(device, dtype=torch.float)
 	elif type(x) is dict:
 		return {k: to_device(v, device) for k, v in x.items()}
 	else:
