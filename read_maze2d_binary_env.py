@@ -1,6 +1,9 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from d4rl_maze2d_dataset.d4rl import load_environment
+import time
+# import multiprocessing
+
+
 from d4rl_maze2d_dataset.maze_functions import convert_maze_to_image
 from d4rl_maze2d_dataset.sequence import RRT_star_traj_binary
 from d4rl_maze2d_dataset.upsample import *
@@ -50,64 +53,138 @@ def get_random_pixel_coordinates(image):
 
     else:
         return None
-    
-data = np.load('maze1.npy')
-# h ,w = data.shape[0], data.shape[1]
-w , h = 1024, 1024
-num_waypoints = 384
-img = convert_maze_to_image(data, w, h)
-# print(img)
-n_trajs = 1
-trajs = []
-for i in range(n_trajs):
-    # get random initial and final points
-    q_init = get_random_pixel_coordinates(img)
-    q_final = get_random_pixel_coordinates(img)
-    # print(q_init)
-    # print(q_final)
 
-    RRT_Star = RRT_star_traj_binary(img, q_init, q_final)
+time_strt = time.perf_counter()  
+for file_num in range(1,2):
+    envfile = "generate_traj_maze2d/15x15/maze" + str(file_num) + ".npy"
+        
+    data = np.load(envfile)
+    # h ,w = data.shape[0], data.shape[1]
+    w , h = 1024, 1024
+    num_waypoints = 256
+    img = convert_maze_to_image(data, w, h)
+    # print(img)
+    n_trajs = 25
+    trajs = []
+    traj_num = 0
 
-    # Main loop of RRT
-    q_new = RRT_Star.q_init
-    while True:
-        # Check if the new vertex can connect with the final point
-        # If yes, finish the loop
-        if RRT_Star.connection_check(q_new) == True:
-            break
+    stop_count = 0
 
-        # Generate random vertex
-        q_rand = RRT_Star.random_vertex_generate()
 
-        # Check if the random vertex is in collision with the geometry
-        if RRT_Star.collision_check_point(q_rand) == True:
+    file = open("trajectories.txt","w")
+
+    while traj_num < n_trajs:
+        # get random initial and final points
+        q_init = get_random_pixel_coordinates(img)
+        q_final = get_random_pixel_coordinates(img)
+
+        min_start_goal_dist = 150
+
+        while( (q_init[0] - q_final[0])**2 + (q_init[1] - q_final[1])**2 <= min_start_goal_dist**2):
+                q_final = get_random_pixel_coordinates(img)
+
+        RRT_Star = RRT_star_traj_binary(img, q_init, q_final)
+
+
+
+        # Main loop of RRT
+        q_new = RRT_Star.q_init
+
+        num_nodes = 0
+
+        time_s = time.perf_counter()
+
+        stopped = False
+
+        while True:
+
+            time_e = time.perf_counter()
+
+            if(time_e - time_s > 2):
+                stopped = True
+                break
+
+            # Check if the new vertex can connect with the final point
+            # If yes, finish the loop
+            if RRT_Star.connection_check(q_new) == True:
+                break
+
+            # Generate random vertex
+            q_rand = RRT_Star.random_vertex_generate()
+
+            # Check if the random vertex is in collision with the geometry
+            if RRT_Star.collision_check_point(q_rand) == True:
+                continue
+
+            # Search for the nearest point in map
+            index_near, q_near = RRT_Star.nearest_vertex_check(q_rand)
+
+            # Check if the line between q_near and q_rand collides with the geometry
+            if RRT_Star.collision_check_line(q_near, q_rand) == True:
+                continue
+
+            # Generate new vertex according to delta_q
+            q_new = RRT_Star.new_point_generate(q_near, q_rand, index_near)
+
+            # num_nodes += 1
+
+
+            # if(num_nodes > 256):
+            #     print("too long, skipping")
+            #     break
+        
+
+        # if(num_nodes > 256):
+        #     continue
+
+
+        if(stopped):
+            print("exceeded 2s, stopping")
+            stop_count += 1
+            
+            # if(stop_count > n_trajs/2):
+            #     print("stopcount exceeded n_trajs/2 , breaking")
+            #     break
+
             continue
 
-        # Search for the nearest point in map
-        index_near, q_near = RRT_Star.nearest_vertex_check(q_rand)
+        plt.close()
 
-        # Check if the line between q_near and q_rand collides with the geometry
-        if RRT_Star.collision_check_line(q_near, q_rand) == True:
-            continue
 
-        # Generate new vertex according to delta_q
-        q_new = RRT_Star.new_point_generate(q_near, q_rand, index_near)
 
-    RRT_Star.figure_generate()
-    traj = RRT_Star.return_traj()
-    samples = interparc_fn(traj[:, 0], traj[:, 1], num_waypoints)
 
-    print('traj: {}'.format(traj))
 
-    for (x,y) in samples:
-        plt.plot(x,y,'r',marker='.')
+        # RRT_Star.figure_generate()
+        traj = RRT_Star.return_traj()
+        samples = interparc_fn(traj[:, 0], traj[:, 1], num_waypoints)
 
-    print(samples.shape)
-    cond = {0 : np.array(q_init), num_waypoints - 1: np.array(q_final)}
-    
-    # traj, cond, val = RRT_Star.generate_traj()    #higher the val, higher the reward (so if val is high, path len is less which is optimal)
-    trajs.append((samples, cond))
+        # print('traj: {}'.format(traj))
 
-plt.imshow(img)
-plt.show()
-print(data)
+        # for (x,y) in samples:
+        #     plt.plot(x,y,'r',marker='.')
+
+        # print(samples.shape)
+        cond = {0 : np.array(q_init), num_waypoints - 1: np.array(q_final)}
+        
+        # traj, cond, val = RRT_Star.generate_traj()    #higher the val, higher the reward (so if val is high, path len is less which is optimal)
+        trajs.append((samples, cond))
+        traj_num += 1
+
+        # print('{} trajs found'.format(traj_num))
+
+    if(len(trajs) == 0):
+        print("No traj found")
+
+file.write('env = {} \n '.format(envfile))
+
+for (samples, cond) in trajs:
+    file.write("samples = " + str(samples) + "\n cond = " + str(cond) + " \n" )
+
+time_end = time.perf_counter()
+print('time taken:{}'.format(time_end - time_strt))
+
+
+
+# plt.imshow(img)
+# plt.show()
+# print(data)
