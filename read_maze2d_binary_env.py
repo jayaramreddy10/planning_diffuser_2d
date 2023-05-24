@@ -54,9 +54,13 @@ def get_random_pixel_coordinates(image):
     else:
         return None
 
-time_strt = time.perf_counter()  
-for file_num in range(1,2):
-    envfile = "generate_traj_maze2d/15x15/maze" + str(file_num) + ".npy"
+
+file = open("trajectories.txt","w")
+for file_num in range(1,4):
+    print('**********************************************************************************************************')
+    time_strt = time.perf_counter()  
+    print('env : maze {}'.format(file_num))
+    envfile = "generate_traj_maze2d/5x5/maze" + str(file_num) + ".npy"
         
     data = np.load(envfile)
     # h ,w = data.shape[0], data.shape[1]
@@ -64,21 +68,30 @@ for file_num in range(1,2):
     num_waypoints = 256
     img = convert_maze_to_image(data, w, h)
     # print(img)
-    n_trajs = 25
+    n_trajs = 20
     trajs = []
     traj_num = 0
 
     stop_count = 0
 
-
-    file = open("trajectories.txt","w")
+    time_strt_skip_env = time.perf_counter()
+    go_for_next_env = False
 
     while traj_num < n_trajs:
+
+        time_end_skip_env = time.perf_counter()
+        if(time_end_skip_env - time_strt_skip_env > 120):
+            go_for_next_env = True
+            print('couldnt extract all 20 paths')
+
+            print('num paths extracted in env {} = {}'.format(file_num, len(trajs)))
+            break
+        
         # get random initial and final points
         q_init = get_random_pixel_coordinates(img)
         q_final = get_random_pixel_coordinates(img)
 
-        min_start_goal_dist = 150
+        min_start_goal_dist = 100
 
         while( (q_init[0] - q_final[0])**2 + (q_init[1] - q_final[1])**2 <= min_start_goal_dist**2):
                 q_final = get_random_pixel_coordinates(img)
@@ -139,7 +152,7 @@ for file_num in range(1,2):
 
 
         if(stopped):
-            print("exceeded 2s, stopping")
+            # print("exceeded 2s, stopping")
             stop_count += 1
             
             # if(stop_count > n_trajs/2):
@@ -148,11 +161,7 @@ for file_num in range(1,2):
 
             continue
 
-        plt.close()
-
-
-
-
+        # plt.close()
 
         # RRT_Star.figure_generate()
         traj = RRT_Star.return_traj()
@@ -174,16 +183,15 @@ for file_num in range(1,2):
 
     if(len(trajs) == 0):
         print("No traj found")
+        continue
 
-file.write('env = {} \n '.format(envfile))
+    file.write('env = {} \n '.format(envfile))
 
-for (samples, cond) in trajs:
-    file.write("samples = " + str(samples) + "\n cond = " + str(cond) + " \n" )
+    for (samples, cond) in trajs:
+        file.write("samples = " + str(samples) + "\n cond = " + str(cond) + " \n" )
 
-time_end = time.perf_counter()
-print('time taken:{}'.format(time_end - time_strt))
-
-
+    time_end = time.perf_counter()
+    print('time taken for env {}:{}'.format(file_num, time_end - time_strt))
 
 # plt.imshow(img)
 # plt.show()

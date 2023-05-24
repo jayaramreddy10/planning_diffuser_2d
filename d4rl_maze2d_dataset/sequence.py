@@ -235,7 +235,7 @@ class RRT_star_traj_binary(object):
         self.qs.append(self.q_init)
         self.qs_parent.append(0)
 
-        self.fig = plt.figure()
+        # self.fig = plt.figure()
 
 
     def random_vertex_generate(self):
@@ -328,8 +328,8 @@ class RRT_star_traj_binary(object):
         codes=[Path.MOVETO,Path.LINETO]
         path = Path(verts, codes)
         patch = patches.PathPatch(path)
-        ax = self.fig.add_subplot(111)
-        ax.add_patch(patch)
+        # ax = self.fig.add_subplot(111)
+        # ax.add_patch(patch)
 
 
     def figure_generate(self):
