@@ -199,25 +199,25 @@ class ValueFunction(nn.Module):
             x : [ batch x horizon x transition ]
         '''
 
-        x = einops.rearrange(x, 'b h t -> b t h')   #(32, 23, 4)-halfcheetah,  or (5, 2, 384)-maze2d
+        x = einops.rearrange(x, 'b h t -> b t h')   #(32, 23, 4)-halfcheetah,  or (5, 2, 384)-maze2d    (64, 2, 128)-new maze2d global CG
 
         ## mask out first conditioning timestep, since this is not sampled by the model
         # x[:, :, 0] = 0
 
-        t = self.time_mlp(time)  #(5, 32)
+        t = self.time_mlp(time)  #(64, 32)
 
         for resnet, resnet2, downsample in self.blocks:
             x = resnet(x, t)
             x = resnet2(x, t)
             x = downsample(x)
 
+        ## x. shape: (64, 256, 16) -- new maze2d-global CG
+        x = self.mid_block1(x, t)  #(64, 128, 16)
+        x = self.mid_down1(x)  #(64, 128, 8)
         ##
-        x = self.mid_block1(x, t)
-        x = self.mid_down1(x)
+        x = self.mid_block2(x, t)  #(64, 64, 8)
+        x = self.mid_down2(x)    #(64, 64, 4)
         ##
-        x = self.mid_block2(x, t)
-        x = self.mid_down2(x)
-        ##
-        x = x.view(len(x), -1)   #x.shape: (5, 768)? 
+        x = x.view(len(x), -1)   #x.shape: (64, 256)? 
         out = self.final_block(torch.cat([x, t], dim=-1))      
         return out

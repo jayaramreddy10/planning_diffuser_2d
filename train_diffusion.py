@@ -173,14 +173,14 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
-        "-e", "--epochs", type=int, default=2, help="Number of epochs to train."
+        "-e", "--epochs", type=int, default=150, help="Number of epochs to train."
     )
 
     parser.add_argument(
         "-n_steps_per_epoch",
         "--number_of_steps_per_epoch",
         type=int,
-        default=200,
+        default=7000,
         help="Number of steps per epoch",
     )
 
@@ -188,7 +188,7 @@ if __name__ == "__main__":
         "-hr",
         "--horizon",
         type=int,
-        default=384,
+        default=256,
         help="Horizon or no of waypoints in path",
     )
 
@@ -243,13 +243,51 @@ if __name__ == "__main__":
     # batch = batchify(dataset[0])
 
     #generate collision free trajs
-    n_trajs = 10
-    trajs = []
-    for i in range(n_trajs):
-        RRT_Star = RRT_star_traj()
-        traj, cond, val = RRT_Star.generate_traj()    #higher the val, higher the reward (so if val is high, path len is less which is optimal)
-        trajs.append((traj, cond))
+    # n_trajs = 10
+    # trajs = []
+    # for i in range(n_trajs):
+    #     RRT_Star = RRT_star_traj()
+    #     traj, cond, val = RRT_Star.generate_traj()    #higher the val, higher the reward (so if val is high, path len is less which is optimal)
+    #     trajs.append((traj, cond))
+    with open('trajectories.txt', 'r') as file:
+        data = file.read()
 
+    trajs = []
+    samples_start = data.find('samples = [[')
+
+    while samples_start != -1:
+        samples_end = data.find(']]', samples_start)
+        samples_str = data[samples_start + 11:samples_end]
+
+        samples_lines = samples_str.split('\n')
+        samples = [list(line.strip().split("\t")) for line in samples_lines if line.strip()]
+
+        for i in range(len(samples)):
+            s = samples[i][0]
+            s = s[1:len(s)-1]
+            s = s.split()
+            s = (float(s[0])/1024.0 , float(s[1])/1024.0)
+            samples[i] = s
+
+        trajs.append((np.array(samples), {0 : np.array(samples[0]), len(samples) - 1: np.array(samples[-1])}))
+    # cond_list = []
+    # cond_start = data.find('cond = {')
+        samples_start = data.find('samples = [[', samples_end)
+    # samples in sample_list
+    # cond_list = []
+    # cond_start = data.find('cond = {')
+
+    # while cond_start != -1:
+    #     cond_end = data.find('}', cond_start)
+    #     cond_str = data[cond_start + 7:cond_end]
+
+    #     cond = cond_str
+
+    #     cond_list.append(cond)
+
+    #     cond_start = data.find('cond = {', cond_end)
+    # print(cond_list)
+    #condition in cond list, gotta phrase
     #generate remaining trajs
 
     dataset = Maze2dDataset(trajs, n_trajs = len(trajs))

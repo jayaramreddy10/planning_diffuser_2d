@@ -14,7 +14,7 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 class GaussianDiffusion_jayaram(nn.Module):
     def __init__(self, model, horizon, observation_dim, action_dim, device, n_timesteps=256,
-        loss_type='l2', clip_denoised=True, predict_epsilon=False,
+        loss_type='l2', clip_denoised=True, predict_epsilon=True,
         action_weight=1.0, loss_discount=1.0, loss_weights=None,
     ):
         super().__init__()
@@ -201,14 +201,14 @@ class GaussianDiffusion_jayaram(nn.Module):
         assert noise.shape == x_recon.shape
 
         if self.predict_epsilon:
-            # loss = self.loss_fn(x_recon, noise)
-            loss, info = self.loss_fn(x_recon, noise)
+            loss = self.loss_fn(x_recon, noise)
+            # loss, info = self.loss_fn(x_recon, noise)
         else:
-            # loss = self.loss_fn(x_recon, x_start)
-            loss, info = self.loss_fn(x_recon, x_start)
+            loss = self.loss_fn(x_recon, x_start)
+            # loss, info = self.loss_fn(x_recon, x_start)
 
-        # return loss
-        return loss, info
+        return loss
+        # return loss, info
 
     def loss(self, x, *args):   #x.shape: (b, 384, 6) , cond : batch[1], cond[0].shape: (b, 4) and cond[1].shape: (b, 4)
         batch_size = len(x)

@@ -188,7 +188,7 @@ if __name__ == "__main__":
         "-hr",
         "--horizon",
         type=int,
-        default=384,
+        default=128,
         help="Horizon or no of waypoints in path",
     )
 

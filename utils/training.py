@@ -31,14 +31,14 @@ class EMA():
             return new
         return old * self.beta + (1 - self.beta) * new
 
-class Trainer_jayaram(object):
+class Trainer_jayaram(object):   #/home2/jayaram.reddy/test_diffusion_planning/logs/maze2d-test/diffusion
     def __init__(
         self,
         diffusion_model,
         dataset,  
         # renderer, 
         ema_decay=0.995,
-        train_batch_size=5,
+        train_batch_size=64,
         train_lr=2e-5,
         gradient_accumulate_every=2,
         step_start_ema=2000,
@@ -48,7 +48,7 @@ class Trainer_jayaram(object):
         save_freq=1000,
         label_freq=40000,
         save_parallel=False,
-        results_folder='/home/jayaram/research/research_tracks/table_top_rearragement/test_diffusion_planning/logs/maze2d-large-v1/diffusion',
+        results_folder='/home/jayaram/research/research_tracks/table_top_rearragement/test_diffusion_planning/logs/maze2d-test/diffusion',
         n_reference=50,
         n_samples=10,
         bucket=None,
@@ -74,9 +74,9 @@ class Trainer_jayaram(object):
         self.dataloader = cycle(torch.utils.data.DataLoader(
             self.dataset, batch_size=train_batch_size, num_workers=1, shuffle=True, pin_memory=True
         ))
-        self.dataloader_vis = cycle(torch.utils.data.DataLoader(
-            self.dataset, batch_size=1, num_workers=0, shuffle=True, pin_memory=True
-        ))
+        # self.dataloader_vis = cycle(torch.utils.data.DataLoader(
+        #     self.dataset, batch_size=1, num_workers=0, shuffle=True, pin_memory=True
+        # ))
         self.optimizer = torch.optim.Adam(diffusion_model.parameters(), lr=train_lr)
 
         self.logdir = results_folder

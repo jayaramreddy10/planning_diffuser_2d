@@ -16,6 +16,7 @@ from utils.rendering import Maze2dRenderer
 
 import torch
 from torch.utils.data import DataLoader as TorchDataLoader
+from torch.utils.data import Dataset
 from tqdm import tqdm
 
 import sys
@@ -25,6 +26,17 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 # os.environ["CUDA_VISIBLE_DEVICES"]="4,5,6,7"
 # os.environ["CUDA_VISIBLE_DEVICES"]="0,1,2,3"
 
+def get_files_in_current_directory(trajs_folder, status = "non_colliding"):
+    trajs = []
+    traj_len = 128
+    for file_name in os.listdir(trajs_folder):
+        # print(file_name)
+        traj = np.load(os.path.join(trajs_folder, file_name))
+        # print(traj.shape)
+        cond = {0 : np.array(traj[0]), traj_len - 1: np.array(traj[-1])}
+        val = 0.0 if (status == "non_colliding") else 1.0
+        trajs.append((traj, cond, val))
+    return trajs
 
 def train_network_single_sample(args, path, cond):
     training_start_time = time.time()
@@ -175,6 +187,18 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
+        "--colliding_trajs_folder",
+        default = "/home/jayaram/research/research_tracks/table_top_rearragement/global_classifier_guidance_for_7DOF_manipulator/Maze2D_Environment/colliding_trajectories",
+        help="give maze2d folder (.npy file)",
+    )
+
+    parser.add_argument(
+        "--non_colliding_trajs_folder",
+        default = "/home/jayaram/research/research_tracks/table_top_rearragement/global_classifier_guidance_for_7DOF_manipulator/Maze2D_Environment/non_colliding_trajectories",
+        help="give maze2d folder (.npy file)",
+    )
+
+    parser.add_argument(
         "-e", "--epochs", type=int, default=2, help="Number of epochs to train."
     )
 
@@ -190,7 +214,7 @@ if __name__ == "__main__":
         "-hr",
         "--horizon",
         type=int,
-        default=384,
+        default=128,
         help="Horizon or no of waypoints in path",
     )
 
@@ -242,16 +266,20 @@ if __name__ == "__main__":
     # cond[args.horizon - 1] = torch.tensor(dataset[0][args.horizon - 1][None, :]).float().to(device)
 
     #generate collision free trajs
-    n_trajs = 10
-    trajs = []
-    for i in range(n_trajs):
-        RRT_Star = RRT_star_traj()
-        traj, cond, val = RRT_Star.generate_traj()    #higher the val, higher the reward (so if val is high, path len is less which is optimal)
-        trajs.append((traj, cond, val))
+    colliding_trajs = get_files_in_current_directory(args.colliding_trajs_folder, "colliding")
+    non_colliding_trajs = get_files_in_current_directory(args.non_colliding_trajs_folder, "non_colliding")
+    min_class_size = min(len(colliding_trajs), len(non_colliding_trajs))
+
+    # print(trajs.shape)   #(num_samples, 2, traj_len)
+    # for i in range(n_trajs):
+    #     RRT_Star = RRT_star_traj()
+    #     traj, cond, val = RRT_Star.generate_traj()    #higher the val, higher the reward (so if val is high, path len is less which is optimal)
+    #     trajs.append((traj, cond, val))
 
     #generate remaining trajs
-
-    dataset = Maze2dDataset_Value(trajs, n_trajs = len(trajs))
+    non_colliding_dataset = Maze2dDataset_Value(non_colliding_trajs, n_trajs = len(non_colliding_trajs))
+    colliding_dataset = Maze2dDataset_Value(colliding_trajs, n_trajs = len(colliding_trajs))
+    balanced_dataset = torch.utils.data.ConcatDataset([non_colliding_dataset, colliding_dataset])
     # batch = batchify(dataset[0])
 	# batch[0].shape: (1, 384, 6)
 	# batch[0] len : 384 (horizon)
@@ -286,4 +314,4 @@ if __name__ == "__main__":
     # train_network_single_sample(args, *batch)
 
     # Train the network on many samples
-    train_value_fn(args, dataset)
+    train_value_fn(args, balanced_dataset)
