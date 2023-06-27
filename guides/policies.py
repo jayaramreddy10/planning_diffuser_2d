@@ -1,6 +1,7 @@
 from collections import namedtuple
 # import numpy as np
 import torch
+import torch.nn as nn
 import einops
 import pdb
 
@@ -9,6 +10,24 @@ import diffuser.utils as utils
 
 Trajectories = namedtuple('Trajectories', 'actions observations')
 # GuidedTrajectories = namedtuple('GuidedTrajectories', 'actions observations value')
+
+
+class ValueGuide(nn.Module):
+
+    def __init__(self, model):
+        super().__init__()
+        self.model = model
+
+    def forward(self, x, cond, t):
+        output = self.model(x, cond, t)
+        return output.squeeze(dim=-1)
+
+    def gradients(self, x, *args):
+        x.requires_grad_()
+        y = self(x, *args)
+        grad = torch.autograd.grad([y.sum()], [x])[0]
+        x.detach()
+        return y, grad
 
 class Policy:
 
@@ -75,3 +94,36 @@ class Policy:
         return action, trajectories
         # else:
         #     return action
+
+class GuidedPolicy:
+
+    def __init__(self, guide, diffusion_model, **sample_kwargs):
+        self.guide = guide   #value fn model
+        self.diffusion_model = diffusion_model
+        self.action_dim = diffusion_model.action_dim    #0
+        self.sample_kwargs = sample_kwargs
+
+    def __call__(self, cond, verbose=True):   #batch_size:64
+        ## run reverse diffusion process
+        samples = self.diffusion_model(cond, guide=self.guide, verbose=verbose, **self.sample_kwargs)
+        trajectories = utils.to_np(samples.trajectories)
+        return trajectories
+
+    @property
+    def device(self):
+        parameters = list(self.diffusion_model.parameters())
+        return parameters[0].device
+
+    def _format_conditions(self, conditions, batch_size):
+        conditions = utils.apply_dict(
+            self.normalizer.normalize,
+            conditions,
+            'observations',
+        )
+        conditions = utils.to_torch(conditions, dtype=torch.float32, device='cuda:0')
+        conditions = utils.apply_dict(
+            einops.repeat,
+            conditions,
+            'd -> repeat d', repeat=batch_size,
+        )
+        return conditions

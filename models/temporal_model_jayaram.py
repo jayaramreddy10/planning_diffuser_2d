@@ -132,7 +132,6 @@ class TemporalUnet_jayaram(nn.Module):
 
         x = einops.rearrange(x, 'b t h -> b h t')   #(32, 6, 384)
         return x
-    
 
 class ValueFunction(nn.Module):
 

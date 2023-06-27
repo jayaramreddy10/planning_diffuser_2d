@@ -25,6 +25,16 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 # os.environ["CUDA_VISIBLE_DEVICES"]="4,5,6,7"
 # os.environ["CUDA_VISIBLE_DEVICES"]="0,1,2,3"
 
+def get_files_in_current_directory(trajs_folder):
+    trajs = []
+    traj_len = 128
+    for file_name in os.listdir(trajs_folder):
+        # print(file_name)
+        traj = np.load(os.path.join(trajs_folder, file_name))
+        # print(traj.shape)
+        cond = {0 : np.array(traj[0]), traj_len - 1: np.array(traj[-1])}
+        trajs.append((traj, cond))
+    return trajs
 
 def train_network_single_sample(args, path, cond):
     training_start_time = time.time()
@@ -82,8 +92,7 @@ def train_network(args, dataset):
     #--------------------------------- main loop ---------------------------------#
     #-----------------------------------------------------------------------------#
 
-    renderer = Maze2dRenderer('maze2d-large-v1')
-    trainer = Trainer_jayaram(diffusion, dataset, renderer)
+    trainer = Trainer_jayaram(diffusion, dataset)
 
     for i in range(args.epochs):
         print(f'Epoch {i} / {args.epochs} | {args.save_ckpt}')
@@ -173,14 +182,14 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
-        "-e", "--epochs", type=int, default=2, help="Number of epochs to train."
+        "-e", "--epochs", type=int, default=150, help="Number of epochs to train."
     )
 
     parser.add_argument(
         "-n_steps_per_epoch",
         "--number_of_steps_per_epoch",
         type=int,
-        default=200,
+        default=10000,
         help="Number of steps per epoch",
     )
 
@@ -190,6 +199,12 @@ if __name__ == "__main__":
         type=int,
         default=128,
         help="Horizon or no of waypoints in path",
+    )
+
+    parser.add_argument(
+        "--trajs_folder",
+        default = "/home/jayaram/research/research_tracks/table_top_rearragement/global_classifier_guidance_for_7DOF_manipulator/Maze2D_Environment/prior_trajectories_dataset",
+        help="give maze2d folder (.npy file)",
     )
 
     # parser.add_argument(
@@ -244,14 +259,21 @@ if __name__ == "__main__":
 
     #generate collision free trajs
     n_trajs = 10
-    trajs = []
-    for i in range(n_trajs):
-        RRT_Star = RRT_star_traj()
-        traj, cond, val = RRT_Star.generate_traj()    #higher the val, higher the reward (so if val is high, path len is less which is optimal)
-        trajs.append((traj, cond, val))
+    # for i in range(n_trajs):
+    #     RRT_Star = RRT_star_traj()
+    #     traj, cond, val = RRT_Star.generate_traj()    #higher the val, higher the reward (so if val is high, path len is less which is optimal)
+    #     trajs.append((traj, cond, val))
 
     #generate remaining trajs
+    trajs = get_files_in_current_directory(args.trajs_folder)
 
+    # print(trajs.shape)   #(num_samples, 2, traj_len)
+    # for i in range(n_trajs):
+    #     RRT_Star = RRT_star_traj()
+    #     traj, cond, val = RRT_Star.generate_traj()    #higher the val, higher the reward (so if val is high, path len is less which is optimal)
+    #     trajs.append((traj, cond, val))
+
+    #generate remaining trajs
     dataset = Maze2dDataset(trajs, n_trajs = len(trajs))
     # batch = batchify(dataset[0])
 	# batch[0].shape: (1, 384, 6)
@@ -278,10 +300,6 @@ if __name__ == "__main__":
     #-----------------------------------------------------------------------------#
     #------------------------ test forward & backward pass -----------------------#
     #-----------------------------------------------------------------------------#
-    action_dim = 0
-    state_dim = 2
-    transition_dim = state_dim + action_dim
-    cond_dim = 2
     # #load model architecture 
     # model = TemporalUnet_jayaram(args.horizon, transition_dim, cond_dim)
     # model = model.to(device)

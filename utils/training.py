@@ -38,7 +38,7 @@ class Trainer_jayaram(object):   #/home2/jayaram.reddy/test_diffusion_planning/l
         dataset,  
         # renderer, 
         ema_decay=0.995,
-        train_batch_size=64,
+        train_batch_size=1024,
         train_lr=2e-5,
         gradient_accumulate_every=2,
         step_start_ema=2000,
