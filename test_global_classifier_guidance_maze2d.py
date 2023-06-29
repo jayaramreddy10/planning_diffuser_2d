@@ -9,8 +9,13 @@ import numpy as np
 from models.temporal_model_jayaram import TemporalUnet_jayaram
 from models.diffusion_jayaram import GaussianDiffusion_jayaram, ValueDiffusion_jayaram
 from models.temporal_model_jayaram import ValueFunction
-from guides.policies import ValueGuide, GuidedPolicy
+from guides.policies import ValueGuide, GuidedPolicy, Policy
 from utils.arrays import batchify
+from libraries import Animation
+from compute_value_guide_grad import *
+from utils.arrays import to_np
+
+# from libraries.visualization import * 
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
@@ -127,11 +132,11 @@ if __name__ == "__main__":
 
     # ***********************load diffusion model
 
-    checkpoint_path = "/home/jayaram/research/research_tracks/table_top_rearragement/test_diffusion_planning/logs/maze2d-test/diffusion/diffusion_weights_latest.pt"
+    checkpoint_path = "/home/jayaram/research/research_tracks/table_top_rearragement/test_diffusion_planning/logs/maze2d-test/diffusion/state_12.pt"
     # Load the checkpoint
     checkpoint = torch.load(checkpoint_path)
     # Access the desired variables from the checkpoint
-    model_state_dict = checkpoint
+    model_state_dict = checkpoint['model']
     # optimizer_state_dict = checkpoint['optimizer']
     # epoch = checkpoint['epoch']
 
@@ -147,30 +152,61 @@ if __name__ == "__main__":
 
     # ***********************load value fn checkpoint
 
-    checkpoint_path = "/home/jayaram/research/research_tracks/table_top_rearragement/test_diffusion_planning/logs/maze2d-test/diffusion/valueguide_latest_state_149.pt"
-    checkpoint = torch.load(checkpoint_path)
-    model_state_dict = checkpoint['model']    
+    value_checkpoint_path = "/home/jayaram/research/research_tracks/table_top_rearragement/test_diffusion_planning/logs/maze2d-test/diffusion/valueguide_latest_state_149.pt"
+    value_checkpoint = torch.load(value_checkpoint_path)
+    value_model_state_dict = value_checkpoint['model']    
     #load model architecture 
     value_model = ValueFunction(horizon, transition_dim, cond_dim)    #this is half of TemporalUnet_jayaram
     value_model = value_model.to(device)
     value_diffusion = ValueDiffusion_jayaram(value_model, horizon, state_dim, action_dim, device)
     value_diffusion = value_diffusion.to(device)
-    value_diffusion.load_state_dict(model_state_dict)
+    value_diffusion.load_state_dict(value_model_state_dict)
 
     #******************************************************inference
     T = 255
     # batch_size = 2048
     # env_name = "two_pillars"
-    point_list = np.array([[-0.85 ,  -0.83], 
+    traj = np.array([[-0.85 ,  -0.83], 
                         #    [-0.4 ,  0.5],
                         #    [0.4 , -0.5],
                         [0.85 ,  -0.83]])
     guide_lr = 1
 
     # #load env
-    # file_num = 1
-    # envfile = "/home/jayaram/research/research_tracks/table_top_rearragement/test_diffusion_planning/5x5/maze" + str(file_num) + ".npy"
-    # data = np.load(envfile)   #(5, 5)
+    file_num = 1
+    envfile = "/home/jayaram/research/research_tracks/table_top_rearragement/test_diffusion_planning/5x5/maze" + str(file_num) + ".npy"
+    data = np.load(envfile)   #(5, 5)
+
+    #consider traj 
+    traj_path = "/home/jayaram/research/research_tracks/table_top_rearragement/global_classifier_guidance_for_7DOF_manipulator/Maze2D_Environment/prior_trajs_dummy/non_colliding_testing/trajectory_0.npy"
+    traj = np.load(traj_path).transpose()
+    cond = {0 : np.array(traj[:, 0]), traj_len - 1: np.array(traj[:, -1])}
+    traj = traj[np.newaxis, ...] 
+    #plot the env
+    # print(args.maze_folder)
+    animation = Animation()
+    env_data = np.load(envfile)
+    # print(env_data.shape)
+    # animation.plot_environment(env_data)
+    #visualize traj
+    animation.plot_points_on_maze(traj, env_data, ax = None, color = 'blue')
+    # get denoised traj
+    policy = Policy(diffusion, action_dim, guidance = False)
+    denoised_trajs_stack = policy(cond, batch_size=1)
+    # denoised_traj, denoised_trajs_stack = policy(cond, batch_size=1)     #[(1,2,128), (1,257,128,2)]    
+    #save denoised traj
+    save_traj_path = "/home/jayaram/research/research_tracks/table_top_rearragement/test_diffusion_planning/test_guided_diffusion"
+    save_traj = to_np(denoised_trajs_stack[0])
+    denoised_trajs_stack[0] = einops.rearrange(denoised_trajs_stack[0], 'b h t -> b t h') 
+    animation.plot_points_on_maze(denoised_trajs_stack[0], env_data, ax = None, color = 'blue')
+    denoised_trajs_stack[0] = einops.rearrange(denoised_trajs_stack[0], 'b h t -> b t h')     
+    # np.save(os.path.join(save_traj_path, "trajectory_without_guidance_" + traj_path.split('/')[-1]), save_traj)
+    
+    #save entire diffusion_trajs_stack
+    save_path = "/home/jayaram/research/research_tracks/table_top_rearragement/test_diffusion_planning/test_guided_diffusion"
+    denoised_trajs_stack_render = to_np(denoised_trajs_stack[1][0])
+    np.save(os.path.join(save_path, "reverse_guided_trajectory_stack_without_guidance_" + traj_path.split('/')[-1]), denoised_trajs_stack_render)
+    
     #             # h ,w = data.shape[0], data.shape[1]
     # w , h = 1024, 1024
     # num_waypoints = 128
@@ -207,10 +243,14 @@ if __name__ == "__main__":
     # reverse_diff_traj = np.zeros((T+1, 2, traj_len*(num_trajs)))
     # # reverse_diff_traj[T] = einops.rearrange(xT, 'b c n -> c (b n)').copy()
 
-    # guide = ValueGuide(model = value_diffusion)
-    # # policy = GuidedPolicy(guide = guide, scale = 0.001, model = model, sample_fn=sampling.n_step_guided_p_sample)   #wrapper around unconsitional diffusion model and value guide
-    # # denoised_guided_traj = policy(cond, )
-
+    guide = ValueGuide(model = value_diffusion)
+    policy = GuidedPolicy(guide, diffusion, action_dim, guidance = True, sample_fn = n_step_guided_p_sample)   #wrapper around unconditional diffusion model and value guide
+    denoised_guided_trajs_stack = policy(cond, batch_size=1, verbose=True)      #[(1,2,128), (1,257,128,2)]
+    denoised_guided_trajs_stack[0] = einops.rearrange(denoised_guided_trajs_stack[0], 'b h t -> b t h') 
+    animation.plot_points_on_maze(denoised_guided_trajs_stack[0], env_data, ax = None, color = 'blue')
+    denoised_guided_trajs_stack_render = to_np(denoised_guided_trajs_stack[1][0])
+    np.save(os.path.join(save_path, "reverse_guided_trajectory_stack_with_guidance_" + traj_path.split('/')[-1]), denoised_guided_trajs_stack_render)
+    
     # diffusion.train(False)
 
     # start_time = time.time()
@@ -274,13 +314,13 @@ if __name__ == "__main__":
 
     # # xhat_0 = xhat_0.cpu().detach().numpy()
 
-    # # np.save("reverse_guided_trajectory"_+ ".npy", reverse_diff_traj)
-    # # plt.imshow(np.rot90(img), cmap = 'gray')
-    # # pixel_traj = guide_point_to_pixel(xhat_0, img.shape)
-    # # pixel_traj[:, 1, :] = img.shape[1] - 1 - pixel_traj[:, 1, :]
-    # # plt.scatter(pixel_traj[0, 0, 1:-1], pixel_traj[0, 1, 1:-1])
-    # # plt.scatter(pixel_traj[0, 0, 0], pixel_traj[0, 1, 0], color = 'green')
-    # # plt.scatter(pixel_traj[0, 0, -1], pixel_traj[0, 1, -1], color = 'red')
+    # np.save("reverse_guided_trajectory"_+ ".npy", reverse_diff_traj)
+    # plt.imshow(np.rot90(img), cmap = 'gray')
+    # pixel_traj = guide_point_to_pixel(xhat_0, img.shape)
+    # pixel_traj[:, 1, :] = img.shape[1] - 1 - pixel_traj[:, 1, :]
+    # plt.scatter(pixel_traj[0, 0, 1:-1], pixel_traj[0, 1, 1:-1])
+    # plt.scatter(pixel_traj[0, 0, 0], pixel_traj[0, 1, 0], color = 'green')
+    # plt.scatter(pixel_traj[0, 0, -1], pixel_traj[0, 1, -1], color = 'red')
 
     # # plt.set_xlim([-1, 1])
     # # plt.set_ylim([-1, 1])

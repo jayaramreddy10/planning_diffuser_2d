@@ -1,5 +1,6 @@
 import numpy as np
 import torch
+import os
 from torch import nn
 import pdb
 from utils.progress import Progress, Silent
@@ -9,8 +10,24 @@ from .helpers import (
     apply_conditioning,
     Losses,
 )
+from utils.arrays import to_torch, to_device
+import sys
+sys.path.append("/home/jayaram/research/research_tracks/table_top_rearragement/test_diffusion_planning")
+from compute_value_guide_grad import n_step_guided_p_sample
+
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
+@torch.no_grad()
+def default_sample_fn(model, x, cond, t):
+    model_mean, _, model_log_variance = model.p_mean_variance(x=x, cond=cond, t=t)
+    model_std = torch.exp(0.5 * model_log_variance)
+
+    # no noise when t == 0
+    noise = torch.randn_like(x)
+    noise[t == 0] = 0
+
+    values = torch.zeros(len(x), device=x.device)
+    return model_mean + model_std * noise, values
 
 class GaussianDiffusion_jayaram(nn.Module):
     def __init__(self, model, horizon, observation_dim, action_dim, device, n_timesteps=256,
@@ -137,21 +154,31 @@ class GaussianDiffusion_jayaram(nn.Module):
         return model_mean + nonzero_mask * (0.5 * model_log_variance).exp() * noise
 
     @torch.no_grad()
-    def p_sample_loop(self, shape, cond, verbose=True, return_diffusion=False):
+    def p_sample_loop(self, shape, cond, verbose=True, return_diffusion=True, sample_fn=default_sample_fn, guidance = False, **sample_kwargs):
         device = self.betas.device
 
         batch_size = shape[0]
         x = torch.randn(shape, device=device)
         x = apply_conditioning(x, cond, self.action_dim)
 
+        #do activation maximization
+        traj_path = '/home/jayaram/research/research_tracks/table_top_rearragement/test_diffusion_planning/test_guided_diffusion'
+        x = np.load(os.path.join(traj_path, 'trajectory_without_guidance_trajectory_0.npy'))
+        x = to_torch(x)
+        x = to_device(x, device)
         if return_diffusion: diffusion = [x]
 
         progress = Progress(self.n_timesteps) if verbose else Silent()
+        # denoised_trajs = []
         for i in reversed(range(0, self.n_timesteps)):
             timesteps = torch.full((batch_size,), i, device=device, dtype=torch.long)
-            x = self.p_sample(x, cond, timesteps)
-            x = apply_conditioning(x, cond, self.action_dim)
+            if guidance: 
+                x = sample_fn(self, x, cond, timesteps, **sample_kwargs)    #kwargs has (guide, sample_fn)
+            else: 
+                x = self.p_sample(x, cond, timesteps)
 
+            x = apply_conditioning(x, cond, self.action_dim)
+            # denoised_trajs.append(x)
             progress.update({'t': i})
 
             if return_diffusion: diffusion.append(x)
