@@ -26,6 +26,15 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 # os.environ["CUDA_VISIBLE_DEVICES"]="4,5,6,7"
 # os.environ["CUDA_VISIBLE_DEVICES"]="0,1,2,3"
 
+import wandb
+
+# wandb setup
+number = 1
+NAME = "model" + str(number)
+ID = 'global_classifier_guide_training' + str(number)
+run = wandb.init(project='classifier_training', name = NAME, id = ID)
+
+
 def get_files_in_current_directory(trajs_folder, status = "non_colliding"):
     trajs = []
     traj_len = 128
@@ -199,14 +208,14 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
-        "-e", "--epochs", type=int, default=2, help="Number of epochs to train."
+        "-e", "--epochs", type=int, default=150, help="Number of epochs to train."
     )
 
     parser.add_argument(
         "-n_steps_per_epoch",
         "--number_of_steps_per_epoch",
         type=int,
-        default=200,
+        default=10000,
         help="Number of steps per epoch",
     )
 

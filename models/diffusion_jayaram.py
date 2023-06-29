@@ -257,7 +257,8 @@ class ValueDiffusion_jayaram(GaussianDiffusion_jayaram):
 
         pred = self.model(x_noisy, cond, t).view(-1)   #scalars, so this value fn predicts rewards/values from noisy trajectories. Each traj shape:  (4, 23), it has info of both (a, s)
 
-        loss = nn.MSELoss()(pred, target)
+        # loss = nn.MSELoss()(pred, target)
+        loss = nn.CrossEntropyLoss()(pred, target)
         return loss
 
     def forward(self, x, cond, t):

@@ -7,6 +7,7 @@ import pdb
 import os
 from .timer import Timer
 from .arrays import batch_to_device, to_np, apply_dict, to_device
+import wandb
 
 def cycle(dl):
     while True:
@@ -48,7 +49,8 @@ class Trainer_jayaram(object):   #/home2/jayaram.reddy/test_diffusion_planning/l
         save_freq=1000,
         label_freq=40000,
         save_parallel=False,
-        results_folder='/home/jayaram/research/research_tracks/table_top_rearragement/test_diffusion_planning/logs/maze2d-test/diffusion',
+        # results_folder='/home/jayaram/research/research_tracks/table_top_rearragement/test_diffusion_planning/logs/maze2d-test/diffusion',
+        results_folder='/home2/jayaram.reddy/planning_diffuser_2d/logs/maze2d-test/diffusion',
         n_reference=50,
         n_samples=10,
         bucket=None,
@@ -122,6 +124,7 @@ class Trainer_jayaram(object):   #/home2/jayaram.reddy/test_diffusion_planning/l
                 # loss, infos = self.model.loss(*batch)
                 loss = self.model.loss(*batch) 
                 loss = loss / self.gradient_accumulate_every
+                wandb.log({'loss': loss, 'epoch': epoch_no, 'step no': step}) #, 'batch': t})
                 loss.backward()
 
             self.optimizer.step()
